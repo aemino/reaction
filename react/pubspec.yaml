@@ -1,0 +1,11 @@
+name: react
+description: Dart bindings to React.
+version: 0.1.0
+homepage: https://github.com/aemino/reaction
+author: aemino <aeminodev@gmail.com>
+
+environment:
+  sdk: '>=2.0.0 <3.0.0'
+
+dependencies:
+  js: ^0.6.1+1
