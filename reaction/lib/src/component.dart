@@ -8,13 +8,31 @@ import 'dart:js_util';
 import 'package:js/js.dart';
 import 'package:react/react.dart' as react;
 import 'package:react/react_dom.dart' as react_dom;
+import 'package:react/create_react_class.dart';
 
 part 'elements.dart';
 
-class _ReactComponent {
-  Component get _dartComponent => props['_dartComponent'];
+class _ReactComponentProxy implements react.Component {
+  final Component _dartComponent;
+  react.ReactElement _reactElement;
 
-  get displayName => _dartComponent.runtimeType.toString();
+  _ReactComponentProxy(this._dartComponent,
+      {Map props, List children = const []}) {
+    final componentProps = newObject();
+    final componentChildren = children.map((c) => c._internalValue);
+    final args = [_reactComponentClass, componentProps]
+        .followedBy(componentChildren)
+        .toList();
+
+    print('here');
+    setProperty(componentProps, '__proxy__', this);
+
+    _reactElement =
+        Function.apply(react.createComponent, args) as react.ReactElement;
+  }
+
+  @override
+  String get displayName => _dartComponent.runtimeType.toString();
 
   @override
   void componentWillMount() => _dartComponent._componentWillMount();
@@ -37,39 +55,88 @@ class _ReactComponent {
   // TODO: componentDidCatch()
 
   @override
-  render() => _dartComponent._render();
+  react.ReactElement render() => _dartComponent._render();
+
+  @override
+  react.ComponentProps get props => _reactElement.props;
+
+  // TODO: Fix this
+  @override
+  Map get state => null;
+
+  @override
+  void forceUpdate(callback) => callMethod(
+      _reactElement, 'forceUpdate', [allowInteropCaptureThis(callback)]);
+
+  @override
+  void setState(updater, [callback]) => callMethod(_reactElement, 'setState',
+      [updater, callback == null ? null : allowInteropCaptureThis(callback)]);
 }
 
-final JsObject _reactComponent = JsObject.jsify({});
+class _ReactComponentClass {
+  static _ReactComponentProxy getProxy(self) {
+    print('props');
+    callMethod(window.console, 'log', [(self as react.ReactElement).props]);
+    return (self as react.ReactElement).props['__proxy__']
+        as _ReactComponentProxy;
+  }
 
-@JS()
-external JsObject createReactClass(JsObject obj);
+  static String getDisplayName(self) =>
+      _ReactComponentClass.getProxy(self).displayName;
 
-final _ReactComponentClass = createReactClass(_ReactComponent());
+  static void componentWillMount(self) =>
+      _ReactComponentClass.getProxy(self).componentWillMount();
 
-abstract class Component {
-  dynamic get _internalValue => _reactComponent;
-  react.Component _reactComponent;
+  static void componentDidUpdate(
+          self, react.ComponentProps prevProps, Map prevState, [snapshot]) =>
+      _ReactComponentClass.getProxy(self)
+          .componentDidUpdate(prevProps, prevState, snapshot);
 
-  final List<Component> children;
+  static void componentWillUnmount(self) =>
+      _ReactComponentClass.getProxy(self).componentWillUnmount();
+
+  static void shouldComponentUpdate(
+          self, react.ComponentProps nextProps, Map nextState) =>
+      _ReactComponentClass.getProxy(self)
+          .shouldComponentUpdate(nextProps, nextState);
+
+  static void getSnapshotBeforeUpdate(
+          self, react.ComponentProps prevProps, Map prevState) =>
+      _ReactComponentClass.getProxy(self)
+          .getSnapshotBeforeUpdate(prevProps, prevState);
+
+  static react.ReactElement render(self) => _ReactComponentClass.getProxy(self).render();
+}
+
+dynamic _createReactComponentClass() {
+  final _classObject = newObject();
+  setProperty(_classObject, 'render',
+    allowInteropCaptureThis(_ReactComponentClass.render));
+
+  return createReactClass(_classObject);
+}
+
+final _reactComponentClass = _createReactComponentClass();
+
+abstract class BaseComponent<T> {
+  T get _internalValue;
+}
+
+abstract class Component implements BaseComponent<react.ReactElement> {
+  _ReactComponentProxy _reactComponentProxy;
+
+  @override
+  react.ReactElement get _internalValue => _reactComponentProxy._reactElement;
+
+  final List<BaseComponent> children;
+
+  Component({List<BaseComponent> children = const []})
+      : this._internal(children);
 
   Component._internal([this.children = const []]) {
-    _reactComponent = react.createComponent(
-        _ReactComponentClass,
-        /*props*/ {'_dartComponent': this},
-        children.map((c) => c._internalValue).toList());
+    _reactComponentProxy =
+        _ReactComponentProxy(this, props: {}, children: children);
   }
-
-  Component._element(String element, [this.children = const []]) {
-    _reactComponent = react.createElement(
-        element,
-        /* props */ {'_dartComponent': this},
-        children.map((c) => c._internalValue).toList());
-  }
-
-  Component._empty() : children = const [];
-
-  Component() : this._internal();
 
   // React Component event interceptors
 
@@ -90,13 +157,13 @@ abstract class Component {
 
   // Overridable event handlers
 
-  void componentWillMount() => null;
+  void componentWillMount() => null; // ignore: avoid_returning_null_for_void
 
   void componentDidUpdate(react.ComponentProps prevProps, Map prevState,
-          [dynamic snapshot]) =>
+          [dynamic snapshot]) => // ignore: avoid_returning_null_for_void
       null;
 
-  void componentWillUnmount() => null;
+  void componentWillUnmount() => null; // ignore: avoid_returning_null_for_void
 
   bool shouldComponentUpdate(react.ComponentProps nextProps, Map nextState) =>
       true;
@@ -107,9 +174,9 @@ abstract class Component {
 
   // Render handler
 
-  dynamic _render() => render()._internalValue;
+  react.ReactElement _render() => render()._internalValue;
 
-  Component render();
+  BaseComponent<react.ReactElement> render();
 }
 
 void magicMountMachine(Component component, Element container) =>

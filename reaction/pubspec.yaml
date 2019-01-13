@@ -10,3 +10,7 @@ environment:
 dependencies:
   react:
     path: ../react
+
+dev_dependencies:
+  style_genshu:
+    git: git://github.com/aemino/dart-style-genshu

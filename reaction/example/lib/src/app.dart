@@ -8,5 +8,6 @@ class MyComponent extends Component {
 }
 
 void runApp() {
+  print("Mounting!");
   magicMountMachine(MyComponent(), querySelector('#app-mount'));
 }

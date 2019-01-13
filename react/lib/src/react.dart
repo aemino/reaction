@@ -11,7 +11,11 @@ external ReactElement createElement(String name, [Map props, List children]);
 @JS('createElement')
 external ReactElement createComponent(JsObject obj, [Map props, List children]);
 
-abstract class ReactElement {}
+@anonymous
+@JS()
+abstract class ReactElement {
+  external ComponentProps get props;
+}
 
 @anonymous
 @JS()
@@ -25,10 +29,11 @@ abstract class Component implements ReactElement {
 
   external String get displayName;
 
+  @override
   external ComponentProps get props;
-  external set props(Map props);
+  // external set props(Map props);
   external Map get state;
-  external set state(Map state);
+  //external set state(Map state);
 
   external Component(Map props);
 
